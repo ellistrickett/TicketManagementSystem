@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Configuration;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 
 namespace TicketManagementSystem
@@ -14,7 +15,7 @@ namespace TicketManagementSystem
             this.ticketRepository = ticketRepository;
         }
 
-        public int CreateTicket(string title, Priority priority, string assignedTo, string description, DateTime createdAt, bool isPayingCustomer)
+        public int CreateTicket(string title, Priority priority, string assignedTo, string description, DateTime createdAt, bool isPayingCustomer, DateTime? utcNow = null)
         {
             // Check if title or description are null or empty then throw exception
             if (string.IsNullOrEmpty(title) || string.IsNullOrEmpty(description))
@@ -29,23 +30,10 @@ namespace TicketManagementSystem
                 user = userRepository.GetUser(assignedTo);
             }
 
-            var priorityyRaised = false;
-            if (createdAt < DateTime.UtcNow - TimeSpan.FromHours(1))
-            {
-                if (priority == Priority.Low)
-                {
-                    priority = Priority.Medium;
-                    priorityyRaised = true;
-                }
-                else if (priority == Priority.Medium)
-                {
-                    priority = Priority.High;
-                    priorityyRaised = true;
-                }
-            }
+            utcNow ??= DateTime.UtcNow;
 
-            // If the title contains some special worrds and the priority has not yet been raised, raise it here.
-            if ((title.Contains("Crash") || title.Contains("Important") || title.Contains("Failure")) && !priorityyRaised)
+            if (createdAt < utcNow - TimeSpan.FromHours(1) ||
+                new[] { "Crash", "Important", "Failure" }.Any(c => title.Contains(c)))
             {
                 if (priority == Priority.Low)
                 {
@@ -73,7 +61,7 @@ namespace TicketManagementSystem
                 }
             }
 
-            // Create the tickket
+            // Create the ticket
             var ticket = new Ticket()
             {
                 Title = title,
@@ -91,38 +79,25 @@ namespace TicketManagementSystem
             return id;
         }
 
-        public void AssignTicket(int id, string username)
+        public void AssignTicket(int ticketId, string username)
         {
             User user = null;
-            var ur = new UserRepository();
+            var userRepository = new UserRepository();
             if (username != null)
             {
-                user = ur.GetUser(username);
+                user = userRepository.GetUser(username);
             }
 
-            var ticket = ticketRepository.GetTicket(id);
+            var ticket = ticketRepository.GetTicket(ticketId);
 
             if (ticket == null)
             {
-                throw new ApplicationException("No ticket found for id " + id);
+                throw new ApplicationException("No ticket found for id " + ticketId);
             }
 
             ticket.AssignedUser = user;
 
             ticketRepository.UpdateTicket(ticket);
         }
-
-        private void WriteTicketToFile(Ticket ticket)
-        {
-            var ticketJson = JsonSerializer.Serialize(ticket);
-            File.WriteAllText(Path.Combine(Path.GetTempPath(), $"ticket_{ticket.Id}.json"), ticketJson);
-        }
-    }
-
-    public enum Priority
-    {
-        High,
-        Medium,
-        Low
     }
 }
