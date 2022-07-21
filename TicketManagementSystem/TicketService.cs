@@ -23,43 +23,11 @@ namespace TicketManagementSystem
                 throw new InvalidTicketException("Title or description were null");
             }
 
-            User user = null;
-            var userRepository = new UserRepository();
-            if (assignedTo != null)
-            {
-                user = userRepository.GetUser(assignedTo);
-            }
+            User user = GetUser(assignedTo);
 
-            utcNow ??= DateTime.UtcNow;
+            priority = SetPriority(title, priority, createdAt, utcNow);
 
-            if (createdAt < utcNow - TimeSpan.FromHours(1) ||
-                new[] { "Crash", "Important", "Failure" }.Any(c => title.Contains(c)))
-            {
-                if (priority == Priority.Low)
-                {
-                    priority = Priority.Medium;
-                }
-                else if (priority == Priority.Medium)
-                {
-                    priority = Priority.High;
-                }
-            }
-
-            double price = 0;
-            User accountManager = null;
-            if (isPayingCustomer)
-            {
-                // Only paid customers have an account manager.
-                accountManager = new UserRepository().GetAccountManager();
-                if (priority == Priority.High)
-                {
-                    price = 100;
-                }
-                else
-                {
-                    price = 50;
-                }
-            }
+            double price = SetPrice(priority, isPayingCustomer, out User accountManager);
 
             // Create the ticket
             var ticket = new Ticket()
@@ -81,12 +49,7 @@ namespace TicketManagementSystem
 
         public void AssignTicket(int ticketId, string username)
         {
-            User user = null;
-            var userRepository = new UserRepository();
-            if (username != null)
-            {
-                user = userRepository.GetUser(username);
-            }
+            var user = GetUser(username);
 
             var ticket = ticketRepository.GetTicket(ticketId);
 
@@ -99,5 +62,57 @@ namespace TicketManagementSystem
 
             ticketRepository.UpdateTicket(ticket);
         }
+
+        private static User GetUser(string assignedTo)
+        {
+            User user = null;
+            var userRepository = new UserRepository();
+            if (assignedTo != null)
+            {
+                user = userRepository.GetUser(assignedTo);
+            }
+
+            return user;
+        }
+
+        private static Priority SetPriority(string title, Priority priority, DateTime createdAt, DateTime? utcNow)
+        {
+            utcNow ??= DateTime.UtcNow;
+
+            if (createdAt < utcNow - TimeSpan.FromHours(1) ||
+                new[] { "Crash", "Important", "Failure" }.Any(c => title.Contains(c)))
+            {
+                if (priority == Priority.Low)
+                {
+                    priority = Priority.Medium;
+                }
+                else if (priority == Priority.Medium)
+                {
+                    priority = Priority.High;
+                }
+            }
+
+            return priority;
+        }
+        private static double SetPrice(Priority priority, bool isPayingCustomer, out User accountManager)
+        {
+            double price = 0;
+            accountManager = null;
+            if (isPayingCustomer)
+            {
+                // Only paid customers have an account manager.
+                accountManager = new UserRepository().GetAccountManager();
+                if (priority == Priority.High)
+                {
+                    price = 100;
+                }
+                else
+                {
+                    price = 50;
+                }
+            }
+            return price;
+        }
+
     }
 }
